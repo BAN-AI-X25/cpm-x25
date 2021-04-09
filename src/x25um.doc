@@ -1,0 +1,1687 @@
+********************************************************
+*                                                      *
+*        X.25 Protocol Interface for CP/M-80           *
+*                                                      *
+*                  USER MANUAL                         *
+*                                                      *
+*   (C) 1985  Ed Elizondo                              *
+*             6 Cypress Court                          *
+*             East Windsor, NJ 08520                   *
+*                                                      *
+*   NOTICE:  All Rights Reserved - These programs and  *
+*   accompanying documentation may be used freely for  *
+*   non-commercial applications.  They may not be sold *
+*   or used for commercial applications without the    *
+*   written permission of the author.                  *
+*                                                      *
+********************************************************
+
+
+
+1.  Description of System
+
+     The  software  system  described herein enables a  Z80  CP/M 
+based   microcomputer   to  communicate  with  a   network   data 
+communications equipment (DCE) port using the X.25  international 
+packet   communications  protocol.   The  system  implements  the 
+functions of a single logical channel data terminating  equipment 
+(DTE) and is capable of operating either in a terminal mode or in 
+a   file  transfer  mode  independently  for  each  direction  of 
+transmission.
+
+     In  terminal  mode,  messages  typed at  the  local  console 
+keyboard  are transmitted to the network as data packets as  soon 
+as  a carriage return is entered.   Incoming packet messages  are 
+displayed on the local console as accepted.
+
+     In  the  file  transfer mode,  the system will  transmit  or 
+receive  files  of  data to or  from  the  network.   since  each 
+direction  of  transmission  is  handled  independently,   it  is 
+possible  to transmit a file while receiving in terminal mode  or 
+viceversa.   It  is  also  possible  to  utilize  the  system  in 
+bidirectional file transfer mode.
+
+
+
+2.  Installation
+
+     The  current version of this software package is  customized 
+to  run  on the Digital Research Computer's  "Big  Board"  single 
+board  computer.  The  minimum  hardware requirements are  a  Z80 
+microprocessor,  a  Zilog  SIO serial communications port  and  a 
+Zilog  CTC  counter/timer,   all  interfaced  using  Z80  mode  2 
+interrupts. 
+
+     Installation  of the system on the Digital  Research's  "Big 
+Board" microcomputer system consists of a) cutting a trace on the 
+PC  board  to  permit SIO-A to operate correctly  in  synchronous 
+mode, b) installing the appropriate jumpers to configure the SIO-
+A  port  to  properly  interface to  the  external  network  port 
+connection, and c) generating the executalbe X25.COM file.
+
+
+
+2.1  Sync Jumper Removal
+
+     As  received  from the manufacturer,  pins 11 (sync) and  12 
+(received  data)  of  SIO-A  (U113)  are  connected  together  to 
+facilitate  automatic determination of baud rate when a  standard 
+(asynchronous)   terminal  is  connected  to   this   port.    In 
+synchronous  mode,  the  sync terminal of the SIO operates as  an 
+output  and,  if left connected,  generates undesired transitions 
+which are superimposed on the input data.   For proper  operation 
+this printed circuit board trace must be cut.
+
+
+
+2.2  SIO-A I/O Jumper Configuration
+
+     Figure  2-1  shows  the I/O strapping  jumpers  required  on 
+connector  JB4 of the "Big Board" to configure SIO-A to interface 
+with a typical main frame X.25 port.   The jumpers configure  the 
+"Big  Board" as an RS232C "modem" using all RS232C status signals 
+(CTS,  RTS,  DCD and DTR) and with the "Big Board" supplying  the 
+baud rate clock to the "terminal" (main frame).  Other hardware 
+configurations may require a different jumper arrangement.   Note 
+that  the  same  clock source must be used for the  SIO  and  the 
+external  device,  whether supplied by the "Big Board" or by  the 
+external device.
+
+
+
+2.3  Generating the X25.COM File
+
+     To  generate  the  X25.COM file for  the  "Big  Board",  the 
+following steps are necessary:
+
+     a)   Assemble the following files using the Digital Research 
+RMAC  assembler and the Digital Research standard  SEQIO.LIB  and 
+Z80.LIB macro libraries:
+
+               X25.ASM
+               LEVEL1.ASM
+               LEVEL2.ASM
+               LEVEL3.ASM
+               FILES.ASM
+               BUFFERS.ASM
+               XUTIL.ASM
+
+     b)   Generate  the  X25.COM file by linking the  .REL  files 
+resulting from step a) using the Digital Research LINK-80  linker 
+using the following command sequence:
+
+     LINK x25,xutil,level1,level2,level3,buffers,files{a,nr]
+
+     Note  that  the  X25 module must be linked  first  since  it 
+contains the program entry point.  The order of linking the other 
+modules is immaterial.
+
+     For other hardware configurations,  a new LEVEL1.ASM  module 
+must be generated with the appropriate hardware interfaces (refer 
+to Section 6).
+
+
+.pa
+    /------------baud rate generator supplies modem with tx clock
+    |
+    | /----------modem supplies SIO with TX clock
+    | |
+    | | /--------baud rate generator supplies SIO with TX clock
+    | | | 
+    | | | /------modem supplies SIO with RX clock
+    | | | |
+    | | | | /----baud rate generator supplies SIO with RX clock
+    | | | | |
+    | | | | | /--baud rate generator supplies modem with RX clock
+    | | | | | |
+    | | | | | |
+39  o o o o o o o o o o o o o o o o o o o o  1
+    |   |   | |   |   |   |   |   |   |
+40  o o o o o o o o o o o o o o o o o o o o  2   
+                | | | | | | | | | | | |
+                | | | | | | | | | | | |
+                | | | | | | | | | | | \----(M) RXD to pin 3
+                | | | | | | | | | | |
+                | | | | | | | | | | \------(T) TXD to pin 2
+                | | | | | | | | | |
+                | | | | | | | | | \--------(M) TXD from pin 3
+                | | | | | | | | |
+                | | | | | | | | \----------(T) RXD from pin 3
+                | | | | | | | |
+                | | | | | | | \------------(M) CTS to pin 5
+                | | | | | | |
+                | | | | | | \--------------(T) RTS to pin 4
+                | | | | | |
+                | | | | | \----------------(M) RTS from pin 4
+                | | | | | 
+                | | | | \------------------(T) CTS from pin 5
+                | | | |    
+                | | | \--------------------(M) DCD to pin 8
+                | | |         
+                | | \----------------------(T) DTR to pin 20
+                | |
+                | \------------------------(M) DTR from pin 20
+                |
+                \--------------------------(T) DCD from pin 8
+
+
+                             LEGEND
+
+(M) indicates RS232C modem configuration of the "Big Board"
+(T) indicates RS232C terminal configuration of the "Big Board"
+ 
+RXD = received data                TXD = transmitted data
+RTS = request to send              CTS = clear to send
+DTR = data terminal ready          DCD = data carrier detect
+
+            Figure 2-1 - SIO-A I-O Strapping Options
+.pa
+3.  Initialization
+
+     Executing  the  X25.COM transient command should  cause  the 
+program  to be loaded from disk,  sign on,  and display the  main 
+menu shown in Figure 3-1.
+
+     At this point,  the X25 system is ready for operation and/or 
+initialization of the default parameters.
+
+
+------------------------------------------------------------------
+
+X.25 packet communications program (06/28/84)
+(c) 1984 Ed Elizondo - all rights reserved
+
+X.25 main menu:
+
+normal operation:               diagnostics:
+    1. initialize link                  10. display system parameters
+    2. transmit restart packet          11. display status flags
+    3. transmit file                    12. display L1 and L2 statistics
+    4. abort file transmission          13. display L3 statistics
+    5. receive file                     14. set flow control ready flags
+    6. abort file reception             15. transmit bad frame
+    7. transmit clear req. packet       16. change frame sequence
+    8. query link status                17. start frame logging
+    9. disconnect link                  18. stop  frame logging
+
+miscellaneous:
+   19. change default parameters        21. exit to monitor
+   20. change remote DTE address        22. exit to CP/M
+
+option (cr to exit)= 
+
+
+------------------------------------------------------------------
+
+                  Figure 3-1 - System Main Menu
+.pa
+3.1  Initialization of System Default Parameters
+     
+     At   system  startup,   all  communication  parameters   are 
+initialized  to  their default values.   The default  values  are 
+obtained from the disk file X25.PAR,  if such a file  exists,  or 
+from  the  options  selected at assembly time,  if no  such  file 
+exists. To initialize the default values and generate the X25.PAR 
+file  for  a given installation,  select option # 19 at the  main 
+menu  prompt.   The system will then prompt the operator for  the 
+desired communication parameters as follows:
+
+
+
+baud rates:
+
+1.   300 baud
+2.   600 baud
+3.  1200 baud
+4.  2400 baud
+5.  4800 baud
+6.  9600 baud
+7. 19200 baud
+
+option (cr to exit)= 3
+
+     Enter   the  desired  baud  rate  option  desired  for   the 
+particular  installation.   Note that the maximum error free rate 
+may vary with particular installations.   It is recommended  that 
+the  lowest rate (option 1) be used until the maximum  error-free 
+rate supported by the system has been determined. 
+
+     Note that this option is only meaningful if the "Big  Board" 
+system  is  supplying the clock to the external device (refer  to 
+Section 2.2).  If the external device is supplying the clock, any 
+option may be selected since it will have no effect.   A carriage 
+return   will  leave  the  option  unchanged  from  the  previous 
+selection. 
+
+
+
+level 2 mode:
+
+1. DTE (normal mode)
+2. DCE (test mode)
+3. self-test mode (with loopback connector)
+
+option (cr to exit)= 1
+
+
+     This  option  determines the assignment of  frame  addresses 
+used  for link level command and response frames,  in  accordance 
+with the X.25 standard. 
+ 
+     For  normal  operation  option 1 (DTE) should  be  selected.  
+Option  2 is for use when two similar DTE units must  communicate 
+without  the intermediary of a network DCE (for example when  two 
+"Big  Board"  systems  are connected together  for  debugging  of 
+software  modifications.   Option  3  is for use  only  in  debug 
+operations  using  a single DTE system in a  loopback  connection 
+arrangement  where transmitted data is fed back to  the  received 
+data terminal.  A carriage return will leave the option unchanged 
+from the previous selection.
+
+
+
+level 3 mode:
+
+1. Virtual Call circuit (VC)
+2. Permanent Virtual Circuit (PVC)
+
+option (cr to exit)= 1
+
+
+     This   option   determines   whether   the   packet    level 
+communications  mode will correspond to the Virtual Call (VC)  or 
+Permanent  Virtual Circuit (PVC) service class of  operation,  as 
+defined in the X.25 standard.   In simplified terms,  the VC mode 
+requires  call  setup packets before data can be transferred  and 
+call clearing packets after data transmission is complete,  while 
+PVC  circuits can transfer data packets at any time.   Most  main 
+frame   implementations  support  only  VC  (option  1)  mode  of 
+operation.  A  carriage return will leave this  option  unchanged 
+from the last selection. 
+
+
+
+local DTE address (0-15 hex digits) =
+
+     This option determines the local DTE address of the  system.  
+An  address  may  be entered by typing from 0 to  15  hex  digits 
+(without any intervening spaces). If an address is selected, only 
+call  request packets having such an address will be accepted  by 
+the system.   A carriage return will set the address length to 0.  
+
+
+
+remote DTE address (0-15 hex digits) = 
+
+     This option determines the initial DTE address of the remote 
+system being accessed.   As before,  an address may be entered by 
+typing  from 0 to 15 hex digits (without any intervening spaces). 
+If an address is selected,  the address will be incorporated into 
+all  call  request packets sent by the system.   Note  that  some 
+main-frame  implementations  accept only 4 hex digits for  a  DTE 
+address  and that this address is used to select the  destination 
+process of the packet communications.  Note also that option # 20 
+of  the main menu can be used to change this address at any time.  
+Using  option  # 19 selects the initial default  value  for  this 
+address, which remains unchanged when option # 20 is selected. 
+
+
+     After selection of the above option, a new default parameter 
+file  X25.PAR is generated on the currently logged disk,  and the 
+system is ready for operation.    The selected parameters may  be 
+verified by means of main menu option # 10.
+  
+
+
+4.  Using the System
+
+     Assuming  that the system is connected to an active  network 
+port and that the system default parameters have been initialized 
+as described in Section 3.1, to use the system in packet terminal 
+mode  requires  simply that the link connection  be  established.  
+Once the link connection is established,  establishing the packet 
+level  call  occurs  automatically  when  the  first  message  is 
+transmitted.   The  following sections describe in greater detail 
+the operation of the system and various options available  during 
+normal  operation.   A summary of the options available from  the 
+main menu is included in Appendix I.
+
+
+
+4.1  Special Command Characters
+
+     When  the  system is in control,  the following  characters, 
+when  typed  locally at the system console,  are  interpreted  as 
+special commands:
+
+
+escape        - this  character  makes the system return  to  the 
+              main   menu.
+
+
+control-B     - this character commands the system to transmit an 
+              interrupt packet. The interrupt packet will only be 
+              transmitted  if the packet channel is in  the  flow 
+              control  ready  state  (p1 or d1) and if  no  other 
+              interrupts are pending confirmation,  otherwise  an 
+              error message results.             
+
+
+control-P     - this  command turns the hard copy printer on  and 
+              off,  similar  to the same function in  CP/M.   The 
+              console bell,  if installed, is sounded to indicate 
+              when  the printer is turned on in a manner  similar 
+              to CP/M 3.0.
+
+
+control-U     - this  command deletes the last (incomplete) typed 
+              line, similar to the same function in CP/M.    
+
+
+delete        - this command deletes the last typed character.
+
+.cp3
+
+carriage
+     return   - this  command transmits the previously typed line 
+              as  a  data  packet,  provided the  link  has  been 
+              initialized and the packet channel is in the  ready 
+              (r1)  or flow control ready (p1 or d1) state.
+
+
+
+4.2  Connecting the Link
+
+     The  first step after initializing the default parameters is 
+to  establish  the  link  level  connection.    The  link   level 
+connection  may be originated either locally by the DTE  (system) 
+or remotely by the DCE (network). 
+
+     Assuming  that  the  system serial  communications  port  is 
+connected to an active network port,  the system at this point is 
+transmitting  continuous flags to the network and hopefully  also 
+receiving flags from the network. 
+
+     If  it  is desired to originate the link connection  (or  to 
+reset an existing connection) at the DTE, simply select main menu 
+option  #1  (initialize  link).   This will cause the  system  to 
+transmit  a SABM frame to the network.   An active  network  will 
+reply with a UA frame, at which point the link is established and 
+the  message  "L2:  rx  UA - link connected" will appear  on  the 
+system console.
+
+     If  no UA frame is received from the DCE within 10  seconds, 
+the  SABM frame is retransmitted.   This process is  repeated  10 
+times, at which point, if no reply has been received, the network 
+is  declared  non-operating and the message "L2:  tx retry  count 
+exhausted - no reply from dce" will appear on the system console.
+
+     If desired,  the system may await initialization of the link 
+by  the  DCE (network).   This is accomplished  by  selecting  no 
+option  (by typing a carriage return) at the main menu.  In  this 
+mode,  the  system will await reception of a SABM frame from  the 
+DCE  and,  when such a frame is received,  the system will  reply 
+with  a UA frame,  causing the link connection to be established.  
+This  will be indicated to the operator by the  message  "L2:  rx 
+SABM - link connected by dce" appearing on the system console.  
+
+     Note that before the SABM frame is received, the system will 
+reply  with  a disconnect mode (DM) frame to any received  frames 
+having the poll bit = 1.  An active network will reply to this DM 
+frame by transmitting a SABM frame,  thus establishing the  link.  
+At  typical  main-frame  implementations,  when  no  activity  is 
+detected  after a period of time,  the network port  periodically 
+transmits RR frames with the poll bit set to 1.   When the system 
+is  connected to such a port,  this will cause the  RR-DM-SABM-UA 
+handshake  to  occur,  thus automatically establishing  the  link 
+connection.
+
+     The  state of the link connection may be determined  at  any 
+time  by  selecting  option # 8 (query link status) at  the  main 
+system menu.  If the link is connected and both ends are ready to 
+accept transmitted frames,  the messages "L2: dte ready" and "L2: 
+dce ready" will appear on the system console.
+
+
+
+4.3  Remote DTE Address Selection
+
+     The  currently selected remote DTE address may be  displayed 
+by means of option # 10 of the system main menu.   To change  the 
+remote DTE address, for example to access a different destination 
+process through the network, option # 20 may be selected.
+
+     When  option # 20 is selected,  a new remote DTE address may 
+be  entered  by  typing  from 0 to 15  hex  digits  (without  any 
+intervening  spaces).   A  carriage return will set  the  address 
+length to 0.  An invalid address will repeat the prompt for a new 
+address.
+
+     The  address so selected will be incorporated into any  call 
+request packets transmitted by the system until modified again by 
+means  of option # 20 (or reinitializing the system  parameters).  
+Note  that  selection of an address by means of option # 20  does 
+not change the default address initialized at system startup.  To 
+change the initial address selection you must use option # 19  to 
+change the default parameters.
+
+
+
+4.4  Packet Level Initialization
+
+     If the link is established by the DTE (system),  the  system 
+automatically  transmits a RESTART REQUEST packet to the network.  
+An active network will reply with a RESTART CONFIRMATION  packet, 
+which  indicates that the packet level is in the ready (p1) state
+awaiting  a call setup.   This will be indicated by  the  message 
+"L3:  rx restart" displayed on the operator console.  If no reply 
+packet is received within 180 seconds, the RESTART REQUEST packet 
+is retransmitted.   If no reply is received the second time,  the 
+network  is declared out of order and the message "L3:  tx  retry 
+count exhausted - no reply from DCE" is displayed.
+
+     If the link is established by the network (DCE),  the system 
+awaits a RESTART INDICATION packet from the network and when such 
+a  packet  is  received,  the system will  rely  with  a  RESTART 
+CONFIRMATION  packet,  thus causing the packet level to enter the 
+ready (p1) state and await a call setup.
+
+     If necessary, a RESTART REQUEST packet can be transmitted by 
+the system by use of option # 2 on the main menu. 
+
+
+
+4.5  Establishing the Call
+
+     If the Permanent Virtual Circuit (PVC) mode of operation has 
+been  selected at system initialization,  and if the DCE supports 
+this  class of operation,  no call setup is necessary and  packet 
+transmission and reception may begin at any time. (note that most 
+main-frame implementations do not support PVC mode of operation).
+
+     If  the  Virtual  Call  (VC)  mode  of  operation  has  been 
+selected, a packet level call must be established before any data 
+packets  may  be transmitted or  received.   Establishment  of  a 
+packet  level  call is automatically accomplished by  the  system 
+when the first console data packet is transmitted.  
+
+     To  establish the packet level call,  it is merely necessary 
+to transmit a data packet.   This is most easily done by typing a 
+carriage return at the system console.   The system automatically 
+transmits  a  CALL  REQUEST  packet  containing  the   previously 
+selected  DTE  addresses.   An active network in the  ready  (p1) 
+state  will reply with a CALL ACCEPTED packet,  if it can  accept 
+the call,  or a CALL REJECTED packet if it cannot.   This will be 
+indicated  by the message "L3:  rx call connected" or  "L3:  call 
+refused - tx clear request" displayed at the system console.   As 
+indicated  in  the  latter message,  a rejected call  causes  the 
+system to transmit a CLEAR REQUEST packet in confirmation.
+
+     When the CALL ACCEPTED packet is received by the system, the 
+channel  is then placed in the flow control ready (d1) state  and 
+the system proceeds to transmit the outstanding data  packet,  in 
+this case, a packet containing a carriage return-line feed pair.
+
+     The call setup may be originated by the DCE.   In this case, 
+the  system  receives an INCOMING CALL packet,  indicated by  the 
+message "L3:  rx incoming call" displayed at the system  console.  
+The system verifies that the incoming call packet has the correct 
+local  DTE  address  and,  if so,  replies with a  CALL  ACCEPTED 
+packet,  at which point the system enters the flow control  ready 
+(d1) state.
+
+     If  the  incoming call packet has an  invalid  address,  the 
+system  replies  with a CLEAR REQUEST packet,  indicated  by  the 
+message  "L3:  bad address - tx clear request".   The system then 
+awaits another call.
+
+
+
+4.6  Operation in Packet Terminal Mode
+
+
+     After  the packet call is established and the system  is  in 
+the  flow  control ready (d1) state,  any messages typed  at  the 
+system  console  are transmitted as data packets,  as soon  as  a 
+carriage return is typed.  
+
+     Note  that the system automatically adds a line  feed  after 
+each  carriage  return that is typed.   Note also that since  the 
+maximum  packet  size handled by the system is  128  data  bytes, 
+longer  messages  typed at the system console will be  broken  up 
+into  more  than  one  packet (the maximum  console  buffer  size 
+currently implemented in the system is 256 bytes, longer messages 
+than this will be truncated to 256 bytes.) 
+
+     The system prompts the operator with a '>>' when it is ready 
+to accept the next message for transmission.
+
+     The  contents of any data packets received after the  packet 
+call  is  established  are  displayed  unchanged  at  the  system 
+console,  except  that  all  control characters  other  than  the 
+following are replaced by a period ('.'):
+
+
+
+                    carriage return
+                    line feed
+                    form feed
+                    bell
+                    horizontal tab
+                    back space
+
+
+
+4.7  Transmitting Interrupt Packets
+
+     Once  the packet call has been established as  described  in 
+Section 4.5,  INTERRUPT packets may be transmitted at any time by 
+typing  control-B  (break) at the system console.   The DCE  will 
+reply  to  this interrupt packet with an  INTERRUPT  CONFIRMATION 
+packet  and  take whatever local action has  been  programmed  in 
+response  to interrupts (this is a network option).   Receipt  of 
+the  interrupt  confirmation  will  be indicated  at  the  system 
+console by the message "L3: rx interrupt confirmation packet".
+
+     Only   one  INTERRUPT  packet  may  be   transmitted   until 
+confirmed.   Attempt  by the operator to send a second  INTERRUPT 
+packet  before the INTERRUPT CONFIRMATION packet has bee received 
+will result in an error message.
+
+
+  
+4.8  Transmitting File Data
+
+     Before transmitting any file data,  the packet call must  be 
+established  as  described  in Section  4.5.  Once  the  call  is 
+established,  file  data  may  be  transmitted  at  any  time  by 
+selecting main menu option # 3.  
+
+     When  option # 3 is selected at the main  menu,  the  system 
+will  ask for a file name,  provided a file transmission  is  not 
+already in process.   Typing a carriage return at this point will 
+abort the file transmission request.  Typing an invalid file name 
+will  cause the file name question to be repeated.  A valid  file 
+name may contain only alphanumeric characters and may contain  an 
+optional  drive  name  and file  type  specifier,  following  the 
+standard CP/M convention, for example B:test.dat.
+
+     Once a valid file name has been entered,  the system  checks 
+to  see  if the file exists on the specified disk.   If the  file 
+does not exist,  the file transmission request is aborted and the 
+message "L4: file not found" is displayed. 
+
+     If  the  file exists,  transmission of the  file  data  will 
+proceed automatically until the end of file unless aborted.  File 
+transmission  may be aborted at any time by selecting option #  4 
+at the main menu. 
+
+     During file transmission,  any messages typed at the console 
+will  not  be  transmitted  to  the  DCE  until  after  the  file 
+transmission is complete.   Note that the maximum console message 
+size of 256 bytes applies also in this case. 
+
+
+
+4.9  Receiving File Data
+
+     Before  receiving file data,  the packet level call must  be 
+established  as  described  in section 4.5.   Once the   call  is 
+established,  file data may be received at any time by  selecting 
+option # 5 from the main menu.
+
+     When  option  # 5 is selected at the main menu,  the  system 
+asks for a file name, provided file data reception is not already 
+in  process.   Typing a carriage return at this point will  abort 
+the  file reception request.   Typing an invalid file  name  will 
+cause the file name question to be repeated.  Again, a valid file 
+name  may contain only alphanumeric characters,  with an optional 
+file  type and disk drive specifier in accordance  with  standard 
+CP/M convention.
+
+     Once  a valid file name has been entered,  the system checks 
+for  the  existence of a file by the same name on  the  specified 
+disk.  If  such a file is found,  the system asks  "file  already 
+exists, delete it (y/n)?".  Answering anything other than "y" (or 
+"Y")  will abort the file reception request.   Answering "y"  (or 
+"Y") will erase the previous file of the same name.
+
+     Once  the  receive file has been  successfully  opened,  all 
+received  data  will  be written onto this file  until  the  file 
+reception  mode  is aborted by means of option # 6 from the  main 
+menu.  
+
+     During  file data reception a plus sign '+' is displayed  on 
+the  screen  as a progress signal for every data packet  received 
+and written to the file.  The received data is unchanged as it is 
+written to the file. 
+
+
+
+4.10  Terminating the Call
+
+     Terminating the packet level call may be done at any time by 
+selecting  main menu option # 7.   If the link is connected  this 
+will  result in the transmission of a CLEAR REQUEST packet.   The 
+DCE  will  normally reply with a DCE CLEAR  CONFIRMATION  or  DCE 
+CLEAR  INDICATION  packet,  at which point the packet level  will 
+close  any transmit or receive files that may be open  and  enter 
+the ready (p1) state to await another call.
+
+     The  call may also be terminated by the DCE by  transmission 
+of  a CLEAR INDICATION packet.   When this packet is received  at 
+the  DTE,  this will be indicated at the console by  the  message 
+"L3:  rx  clear indication packet,  cause = xx",  where xx is the 
+cause for the call termination.   The DTE will reply with a CLEAR 
+CONFIRMATION packet, close any transmit or receive files that may 
+be open and enter the ready (p1) state to await another call. 
+
+
+
+4.11  Disconnecting the Link
+
+     The  link  connection  may be disconnected at  any  time  by 
+selecting option # 9 from the main menu.   This option will cause 
+the  transmission of a DISC frame.   An active network will reply 
+with  a  UA  frame,  at  which point  the  frame  level  link  is 
+disconnected.  This will be indicated at the system console by th 
+message "L2: rx UA - link disconnected'.
+
+     If no reply is received within 10 seconds the DISC frame  is 
+retransmitted.   This  process  is repeated 10  times,  at  which 
+point,  if  no reply has been received,  the network is  declared 
+non-operational  and the message 'L2:  tx retry count exhausted - 
+no reply from DCE" is displayed at the console.
+
+     The link may also be disconnected by the DCE by transmission 
+of  a DISC frame.   When a DISC frame is received,  this will  be 
+indicated by the message "L2: rx DISC - link disconnected by dce" 
+at the system console.  The system will reply with a UA frame, at 
+which point the link will be disconnected.
+
+
+
+5.  Diagnostic Facilities
+
+
+5.1  Link Query Function
+
+     The link query function, requested by option # 8 of the main 
+system  menu,  provides  the current link status as perceived  by 
+both ends of the link.
+
+     When  this option is selected,  the system  interrogates  it 
+internal  link  state flags.   If the link is  disconnected,  the 
+message "L2: dte link is disconnected" is displayed.  If the link 
+is connected,  the system checks to see if the DTE is in a  frame 
+reject,  receive  busy,  or  receive ready  condition and if  so, 
+displays the appropriate status.  
+
+     The  system then transmits the appropriate RR,  RNR  or  REJ 
+frame,  with the poll bit set to 1,  to the DCE.  The system then 
+awaits  a  reply frame from the DCE with the corresponding  final 
+bit  set to 1.   When such a frame is received,  the system  then 
+displays the corresponding DCE status.  In normal conditions, the 
+message displayed will be "L2:  dce ready",  denoting that an  RR 
+frame with the final bit set to 1 has been received from the DCE.
+
+     If  no reply frame (with the final bit set to 1) is received 
+within  10 seconds,  the RR,  RNR or REJ frame  is  retransmitted 
+(with  the poll bit set to 1).   This process is repeated a total 
+of 10 times.   If no reply is received after the tenth time,  the 
+link is automatically disconnected.
+
+
+
+5.2  Diagnostic Display Screens
+
+     Four  diagnostic  display  screens  are  available  to   the 
+operator  in response to main menu options # 10,  11,  12 and 13.  
+A brief description of the information available on these screens 
+is as follows: 
+
+
+System Parameters (option # 10)
+
+     This  screen  displays  the current  status  of  all  system 
+parameters and flow control variables.
+
+
+System Status Flags (option # 11)
+
+     This screen displays the current state of all system control 
+flags.   The  definition of these flags may be found in  Appendix 
+II.   In  normal  packet terminal mode of  operation,  after  the 
+packet  call has been established,  the state of all flags should 
+be 0 except for level 2 link status bit # 2 (link connected)  and 
+level 3 channel status bit # 0 (flow control ready state d1).
+
+
+L1 and L2 System Statistics (option # 12)
+
+     This  screen  displays the accumulated totals of the  system 
+diagnostic  counters  to be displayed for the level  1  (hardware 
+level) and level 2 (link level) functions.
+
+
+L3 System Statistics (option # 13)
+
+     This  screen displays the accumulated totals of  the  system 
+diagnostic  counters  to  be displayed for the  level  3  (packet 
+level) functions.
+
+
+
+5.3  Special Debug Functions
+
+
+     Aside from the link query function described in Section 5.1, 
+three special debug functions are available to the system operator 
+in  response  to  main  menu options #  14,  15  and  16.   These 
+functions,  intended mainly to check out specific system software 
+design areas, are:
+
+
+Set Flow Control Ready Flags (option # 14)
+
+     This  diagnostic  function will cause the  local  system  to 
+behave as if the level 2 link had been successfully connected and 
+the level 3 link is in flow control ready state.   This  function 
+is  intended  for  use mainly during software  checkout  when  an 
+active network is not available and serves no useful purpose when 
+the system is connected to an active network. 
+
+
+Transmit Bad Frame (option # 15)
+
+     This  diagnostic  function  will cause a transmission  of  a 
+frame with an invalid control field (0ffh).   This will force the 
+DCE  to  reply  with a  CMDR  (command  reject)  response.   This 
+function  is  intended  for use during software checkout  of  the 
+system  exception  conditions  and serves no  purpose  in  normal 
+operation.
+
+
+Change Frame Sequence (option # 16)
+
+
+     This diagnostic function will decrement (mode 7) the current 
+value  of the frame level send state variable  V(s).   This  will 
+cause  the DTE to detect a received sequence error and reply with 
+a REJ (reject) response frame back to the DTE.   This,  in  turn, 
+should  cause a retransmission of the "missed" frame by the  DTE. 
+This function is intended for software checkout of this exception 
+condition and serves no useful purpose during normal operation. 
+
+
+
+5.4  Session Logging
+
+     This  useful diagnostic function is enabled and disabled  by 
+main menu options # 17 and 18 respectively.  
+
+     When this function is enabled,  all transmitted and received 
+frames  are  logged  in  a  special  disk  file  (X25.LOG).   The 
+information logged consists of a) the direction of  transmission, 
+b)  the frame address field and c) the frame control  field.   An 
+auxiliary  diagnostic  program (PLOG.COM) has been  developed  to 
+print  out  this information in tabular form and to identify  the 
+address and frame type in X.25 notation,  as well as extract  the 
+sequence   numbers  N(s)  and  N(r),   and  the  poll/final   bit 
+information from the control field of the frame.
+
+     Note that enabling the logging function by means of option # 
+17 erases any previously existing X25.LOG file.  If it is desired 
+to log more than one session,  erasure of the earlier session log 
+may  be  prevented  by renaming the existing X25.LOG  file  to  a 
+different name (for example X25.L1).
+
+     Session logging may be started at any time,  even before the 
+link connection has been established. 
+
+
+
+
+5.5  Assembly Time Debug Options
+
+     Special  assembly  time debug options have been provided  in 
+the  modules X25.ASM,  LEVEL2.ASM and  LEVEL3.ASM.   These  debug 
+options are enabled by setting the module local variable  "debug" 
+equal  to "true" prior to assembly time.   When the debug options 
+are set to "true", the following functions are enabled:
+
+
+X25.ASM debug option
+
+     Setting the "debug" parameter equal to "true" in the X25.ASM 
+module causes all received console data packets to be tagged with 
+the  symbol  <r> at the beginning of each  packet.   This  allows 
+tracking  on the system console as each packet is  received  when 
+long text messages are being exchanged. 
+
+
+LEVEL2.ASM debug option
+
+     Setting  the  "debug"  parameter  equal  to  "true"  in  the 
+LEVEL2.ASM module causes the display at the system console of the 
+frame   transmit   sequence  number  N(s)  of   all   transmitted 
+information frames. 
+
+     In  addition  to  the above,  the debug  option  causes  the 
+entire contents of any received frames having a bad address to be 
+dumped (in hex format) on the system console. 
+
+
+LEVEL3.ASM debug option
+
+     Setting  the  "debug"  parameter  equal  to  "true"  in  the 
+LEVEL3.ASM module causes the display at the system console of the 
+packet send sequence number P(s) of all transmitted data packets. 
+In  order  to  distinguish the packet sequence numbers  from  the 
+frame  sequence  numbers  displayed by the debug  option  in  the 
+LEVEL2.ASM  module,  the  packet sequence numbers  are  displayed 
+within square brackets [n].
+
+
+
+5.6  Use of PFM Monitor
+
+     Provisions  have  been included in the system  to  exit  the 
+system to the "Big Board" PFM monitor,  leaving the system status 
+unchanged.   This  allows examination of memory locations  within 
+the system programs for diagnostic purposes.
+
+     To  exit to the PFM monitor select option # 21 from the main 
+menu.  To return to the system program without reinitializing the 
+X25 system,  type "G3" at the PFM monitor prompt '*'.   This will 
+bypass the initialization routines and return control to the main 
+program loop in the system.
+
+     For  a  description  of the various commands  and  functions 
+available  from the PFM monitor refer to the PFM-80 Users  Manual 
+supplied with the Digital Research Computer's "Big Board".
+
+
+
+6. System Alteration
+
+     
+     Modifications  to  the system have been facilitated  by  the 
+partitioning  and separation of the various X.25 protocol  levels 
+into seven independent relocatable modules as follows:
+
+
+     1) X25.ASM     - the main sequencer and user interface
+     2) LEVEL1.ASM  - the hardware/interrupt service module
+     3) LEVEL2.ASM  - the link level (HDLC) handler
+     4) LEVEL3.ASM  - the packet level handler
+     5) BUFFERS.ASM - the data buffer handler
+     6) FILES.ASM   - the disk file handler
+     7) XUTIL.ASM   - miscellaneous utility functions   
+
+
+     The   system,   as  implemented,   may  be  ported  to   any 
+microprocessor  system having the following minimum hardware  and 
+software requirements:
+
+
+     Z80 processor, supporting Mode 2 interrupts 
+     Z80-SIO serial interface device
+     Z80-CTC counter-timer device
+     26K minimum of user available RAM
+     CP/M (version 2.2 or later) operating system host
+
+
+     With  any  implementation  other than the  original  Digital 
+Research Computer's "Big Board"  changes will be required to  the 
+LEVEL1   module,   which  contains  all  the  hardware  dependent 
+subroutines.  No changes should be required to the LEVEL2.ASM  or 
+LEVEL3.ASM or BUFFERS.ASM modules as all system hardware and file 
+interfacing is done via CP/M BDOS functions.  Changes to the user 
+interface  in the X25.ASM module may be desirable for  particular 
+applications   (the current x25.ASM module is intended mostly  as 
+an X.25 protocol debugging tool).
+  
+
+.pa
+.op
+
+
+
+
+                           APPENDIX I
+
+
+                SUMMARY OF SYSTEM USER FUNCTIONS  
+
+.pa
+.fo                         I-#
+.pn1
+     The functions available to the system operator from the main 
+menu are as follows: 
+
+
+    0.  Standby State - If no option is selected at the  main 
+        menu, the system returns to the state existing before the 
+        menu display was requested.   If no option is selected at 
+        system  startup,  the  system enters a standby state  and 
+        awaits  for  establishment  of the link  by  the  network 
+        (DCE).   Typing an escape character at the local  console 
+        returns the system to the main menu. 
+
+
+    1.  Initialize Link - If this option is selected,  the system 
+        (DTE) will attempt to establish the link by  transmitting 
+        a  SABM  (Set  Asynchronous Balanced Mode) frame  to  the 
+        remote DCE.   The link is established upon the  reception 
+        of a valid UA (Unnumbered Acknowledgement) frame from the 
+        DCE.   If  a  valid  UA frame is not received  within  10 
+        seconds,  the system retransmits the SABM frame.   If  no 
+        reply is obtained after 10 retries,  the link is declared 
+        inoperative  and the system returns to the standby  state 
+        to  await  connection  by  the  DCE  or  manual  operator 
+        intervention.
+               
+        If  the  link  is successfully established by  the  local 
+        system  (DTE),  the system will then transmit  a  RESTART 
+        packet  and  await  the  reception  of  a  valid  RESTART 
+        CONFIRMATION  packet  in order to initialize  the  packet 
+        level  to  the  data  transfer  state.  If  the  link  is 
+        established  by the remote DCE,  the system will await  a 
+        RESTART packet from the DCE.
+
+
+    2.  transmit Restart Packet  When this function is  selected, 
+        the  system  will  transmit  a  restart  request  packet, 
+        provided that the level 2 link is connected.   The system 
+        will then enter the restart request state (r2).
+
+
+    3.  Transmit  File  - When  this function  is  selected,  the 
+        system  will ask for a standard CP/M file name specifier.  
+        The  system  will  then check for the  existence  of  the 
+        specified  file.   If  the file exists and  the  link  is 
+        established,  the  system  will proceed to  transmit  the 
+        specified data file to the host in the form of a numbered 
+        sequence  of  data  packets.   If  the system  is  in  VC 
+        (Virtual  Call)  mode,  the transmission of data  packets 
+        will  be  preceded with a CALL REQUEST  packet  and  will 
+        await  acceptance  of  the  call as  indicated  with  the 
+        reception  of a valid CALL ACCEPTED packet from the  DCE.  
+        If the system is in PVC (Permanent Virtual Circuit) mode, 
+        no  call  setup is required and the  packet  transmission 
+        will take place as soon as the link level is established. 
+
+
+    4.  Abort  File  Transmission - This function will  stop  the 
+        transmission  of  a  data file  previously  initiated  by 
+        option 2  and will close the data file.
+
+
+    5.  Receive File - When this function is selected, the system 
+        will ask for a CP/M file specifier.  The system will then 
+        check  for the existence of a file by the same name.   If 
+        such  a  file exists,  the system will  ask  whether  the 
+        current file is to be deleted.   If the answer is 'Y', or 
+        if  no previous file of the same name exists,  the system 
+        will  open a file with the given name.   The system  will 
+        then  monitor  the network for any  valid  incoming  data 
+        packets.  When such a packet is received, the data packet 
+        will be stored on the disk file write buffer.   When  the 
+        disk file buffer is full, the system automatically writes 
+        the buffer to the disk.
+
+        File  reception  will continue until the  file  reception 
+        mode is terminated by means of main menu option # 6.
+  
+
+    6.  Abort  File  Reception  - This function  will  close  the 
+        receive data file and revert the system to terminal mode.  
+        Any  data  packets  remaining  in  the  network  will  be 
+        displayed on the system console.
+
+
+    7.  Transmit   Clear   Request  Packet  - If  the   link   is 
+        established,  this function will transmit a clear request 
+        packet.  This  will  have the effect of  terminating  the 
+        Virtual Call in VC mode.
+
+
+    8.  Query  Link  Status - This function will first display  a 
+        message  giving  the link status of the local  system  or 
+        DTE. If the link is established, the system will transmit 
+        a  suitable frame with the poll bit=1,  thus forcing  the 
+        remote DCE to reply with a status indication frame.   The 
+        received  DCE  status  indication  is  displayed  to  the 
+        operator.  If no reply is received within 10 seconds, the 
+        query  frame will be retransmitted up to a maximum of  10 
+        times.   If  no reply is received after 10  retries,  the 
+        link  is  declared  inoperative.   The  purpose  of  this 
+        function is mainly diagnostic.
+
+
+    9.  Disconnect   Link  -  This  function  will   attempt   to 
+        disconnect  the link by transmitting a DISC  (Disconnect) 
+        frame.   The  link  is considered disconnected  upon  the 
+        reception  of a valid UA frame.   If a valid UA frame  is 
+        not  received within 10 seconds,  the system  retransmits 
+        the  DISC  frame.   If  no  reply is  obtained  after  10 
+        retries,  the link is declared inoperative and the system 
+        returns to the standby state to await reconnection by the 
+        DCE or manual operator intervention.
+
+
+   10.  Display System Parameters - This diagnostic function will 
+        cause the current state of all system parameters and flow 
+        control variables to be displayed to the operator.
+
+
+   11.  Display  Status  Flags - This  diagnostic  function  will 
+        cause the current state of all system control flags to be 
+        displayed to the operator.
+
+
+   12.  Display  L1 and L2 Statistics - This diagnostic  function 
+        will   cause  the  accumulated  totals  of   the   system 
+        diagnostic  counters  to  be displayed for  the  Level  1 
+        (physical level) and Level 2 (link level) functions.
+
+ 
+   13.  Display  L3 Statistics - This  diagnostic  function 
+        will   cause   the  accumulated  totals  of  the   system 
+        diagnostic  counters  to  be displayed for  the  Level  3 
+        (packet level) functions.
+
+
+   14.  Set  Flow Control  Ready Flags - This diagnostic function 
+        will  cause the local system to behave as if the Level  2 
+        link had been successfully connected and the Level 3 link 
+        is in flow control ready (d1) state.   This function  was 
+        mainly  used during the early design stages to facilitate 
+        testing.
+
+
+   15.  Transmit  Bad Frame - This diagnostic function will cause 
+        the transmission of a frame with an invalid control field 
+        (0ffh).  This function is primarily used to force the DCE 
+        to   transmit  a  CMDR  (command  reject)  response   for 
+        diagnostic purposes.
+
+
+   16.  Change Frame Sequence  This diagnostic function will   
+        decrement  (mod  7) the current value of the  send  state 
+        variable  V(s).   This function is intended to cause  the 
+        DCE  to  detect a received sequence error and  cause  the 
+        transmission  of a REJ (reject) response back to the  DTE  
+        in order to test this exception condition.
+
+
+   17.  Start  Frame  Logging  - This  diagnostic  function  will 
+        enable  logging on a special disk file (X25.LOG)  of  all 
+        incoming and outgoing frames.   As presently implemented, 
+        the   logging  information  includes  the  direction   of 
+        transmission,  the  frame  address  field and  the  frame 
+        control   field.    An   auxiliary   diagnostic   program 
+        (PLOG.COM)   has   been  developed  to  print   out   the 
+        information  in tabular form and to identify the  address 
+        and packet type in X.25 notation,  as well as extract the 
+        sequence  numbers  N(r)  and  N(s)  and  poll/final   bit 
+        information from the control field of the frame.
+
+
+   18.  Stop  Frame Logging - This diagnostic function stops 
+        the frame logging function described above and closes the 
+        log file.
+
+
+   19.  Change Default Parameters - This special function permits 
+        the  operator  to  change the  following  system  default 
+        parameters:
+
+               baud rate (300-19200 baud in 7 steps)
+               level 2 mode (DTE, DCE or self test)
+               level 3 mode (PVC or VC)
+               local DTE address length
+               local DTE address 
+               remote DTE address length
+               remote DTE address
+
+        After  the above parameters are changed,  the values  are 
+        written in a special disk file (X25.PAR). When the system 
+        is  started again at a future session,  the  values  read 
+        from this disk file become the default values on restart, 
+        so  the  parameters  remain  unchanged  from  session  to 
+        session unless changed by means of this option. 
+
+
+   20.  Change  Remote DTE Address  This function is intended  to 
+        facilitate  changing the called (remote) DTE  address  in 
+        call  request packets to allow the system to be connected 
+        to  various  remote DTE's or processes via  the  network.  
+        Using  this  function  does not change  the  default  DTE 
+        address used at system initialization.
+
+
+   21. Exit to Monitor - This diagnostic function will cause the 
+        system  to be terminated and control to be passed to  the 
+        PFM  monitor in the Digital Research  'Big  Board'.   The 
+        primary  use of this function is to permit examination of 
+        memory  locations  within  the  program  for   diagnostic 
+        purposes.
+
+
+   22.  Exit to CP/M - This function will cause all open files to 
+        be closed,  to terminate the X25 protocol system,  and to 
+        return control to the CP/M operating system.
+
+.pa
+.op
+
+
+
+
+
+                           APPENDIX II     
+          
+
+                       SYSTEM STATUS FLAGS
+.pa
+.pn1
+.fo                          II-# 
+                       System Status Flags
+
+
+     The following system status flag indicators are available to 
+the local user in response to main menu option # 11:
+
+level 1 flags
+
+        definition of rx status (rxstat) byte flags:
+
+        bit     set condition
+        0       undefined
+        1       undefined
+        2       undefined
+        3       undefined
+        4       undefined
+        5       receiver buffers unavailable
+        6       undefined
+        7       undefined
+
+        definition of tx status (txstat) byte flags:
+
+        bit     set condition
+        0       tx active
+        1       tx message complete
+        2       tx frame underrun
+        3       next tx character is control
+        4       undefined
+        5       undefined
+        6       undefined
+        7       undefined
+
+.cp10
+        definition of timer status (tistat) byte flags:
+
+        bit     set condition
+        0       level 2 timer t1 timed out
+        1       level 3 timer t20 timed out
+        2       level 3 timer t21 timed out
+        3       level 3 timer T22 timed out
+        4       level 3 timer T23 timed out
+        5       undefined
+        6       undefined
+        7       undefined
+
+
+.cp15
+level 2 flags
+
+        definition of link status (lkstat) byte flags:
+
+        bit     set condition
+        0       link connect in process
+        1       link disconnect in process
+        2       link connected
+        3       DCE busy
+        4       DTE busy (from level 1 module)
+        5       unassigned
+        6       DTE REJ condition
+        7       DCE REJ condition
+
+.cp10
+        definition of poll/final (P/F) byte flags:
+  
+        bit     set condition
+        0       =0 always
+        1       =0 always
+        2       =0 always
+        3       =0 always
+        4       poll/final bit
+        5       =0 always
+        6       =0 always
+        7       =0 always
+
+.cp10
+        definition of flow status (l2stat) byte flags:
+
+        bit     set condition
+        0       link query in process
+        1       DTE FRMR condition
+        2       DCE FRMR condition
+        3       unassigned
+        4       unassigned
+        5       unassigned
+        6       retransmit old I frame
+        7       timer recovery condition
+
+
+.cp15
+level 3 flags
+
+
+        definition of channel status (chstat) byte flags:
+        (note that state r1 (packet level ready)
+         corresponds to level 2 link connected)
+
+        bit     set condition
+        0       flow control ready state (d1)
+        1       DTE restart request state (r2)
+        2       DTE waiting state (p2)
+        3       DTE reset request state (d2)
+        4       DTE clear request state (p6)
+        5       ready (p1)
+        6       undefined
+        7       undefined
+
+        definition of flow control (l3stat) byte flags:
+
+        bit     set condition
+        0       DTE busy
+        1       DCE busy
+        2       DTE interrupt pending confirmation
+        3       undefined
+        4       undefined
+        5       undefined
+        6       transmission completed - ready to clear
+        7       outgoing message waiting for call setup
+
+.cp10
+
+        definition of Qualifier (Q) byte flags:
+  
+        bit     set condition
+        0       =0 always
+        1       =0 always
+        2       =0 always
+        3       =0 always
+        4       =0 always
+        5       =0 always
+        6       =0 always
+        7       Q bit
+
+        definition of Delivery Confirmation (D) byte flags:
+  
+        bit     set condition
+        0       =0 always
+        1       =0 always
+        2       =0 always
+        3       =0 always
+        4       =0 always
+        5       =0 always
+        6       D bit
+        7       =0 always
+
+
+.cp15
+level 4 flags
+
+        definition of flow status (l4stat) byte flags:
+
+        bit     set condition
+        0       prompt console for packet input
+        1       unasigned
+        2       unasigned
+        3       unasigned
+        4       unasigned
+        5       unasigned
+        6       unasigned
+        7       unasigned
+
+
+
+disk file flags
+
+        definition of disk file status (fstat) byte flags:
+
+        bit     set condition
+        0       receive file open
+        1       transmit file open
+        2       undefined
+        3       undefined
+        4       undefined
+        5       undefined
+        6       undefined
+        7       log file open
+
+.pa
+.op
+
+
+
+
+
+                          APPENDIX III
+
+
+                SYSTEM STATUS AND ERROR MESSAGES
+.pa
+.fo                         III-#
+.pn1
+     The  following  is a complete listing of all  system  status 
+messages and error messages.   The general format of system error 
+messages is as follows:
+
+
+                Ln: message [- action performed]
+
+
+     where     n =  protocol level generating the message
+
+                         1 = hardware level
+                         2 = link (frame) level
+                         3 = packet level
+                         4 = user level
+                 
+        The system module name generating the message is shown in 
+parenthesis after each message.
+
+
+
+Hardware Level (L1:) Messages
+
+
+     There  are  no  user  messages  generated  by  the  hardware 
+protocol level.
+
+
+
+Link Level (L2:) Messages
+
+L2: link connected (X25.ASM) - this status message indicates that 
+the link level is presently connected.
+
+L2:  waiting  for link connect from DCE  (X25.ASM) - this  status 
+message  indicates that the link level is presently not connected 
+and that no link connect action has been initiated by the system.
+
+L2:   attempting  link  connect...   (LEVEL2.ASM)  - this  status 
+message   is  displayed  when  the  first  SABM  frame  is  being 
+transmitted as a result of system menu option # 1 being selected.
+
+L2:  attempting link disconnect...  (LEVEL2.ASM)  -  this  status 
+message   is  displayed  when  the  first  DISC  frame  is  being 
+transmitted as a result of system menu option # 9 being selected.
+ 
+L2:   link  is  already disconnected  (LEVEL2.ASM)  - this  error 
+message is displayed when system menu option # 9 is selected  and 
+te link is already disconnected.
+
+L2:  dte  link is disconnected (LEVEL2.ASM) - this status message 
+is displayed in reply to a link query (when system menu option  # 
+8 is selected) if the link is disconnected.
+
+L2: dte FRMR/CMDR condition (LEVEL2.ASM) - this status message is 
+displayed  in reply to a link query if a command or frame  reject 
+condition exists in the system. 
+
+L2:  dte  busy (LEVEL2.ASM) - this status message is displayed in 
+reply to a link query if the system dte busy flag is set.
+
+L2:  dte  in frame reject condition  (LEVEL2.ASM)  - this  status 
+message is displayed in reply to a link query if the system is in 
+a frame sequence reject condition.
+
+L2:  dte ready (LEVEL2.ASM) - this status message is displayed in 
+reply  to a link query condition if the link is connected and the 
+system is not in a CMDR/FRMR dte busy or dte reject condition.
+
+L2:   interrogating  dce  status...  (LEVEL2.ASM)  - this  status 
+message  is  displayed during a link query when a frame is  being 
+sent  to the dce with the poll bit set to 1 in order to  force  a 
+reply from the dce.
+
+SABM  tries  to  go = n (LEVEL2.ASM) - this progress  message  is 
+displayed when a link connect is in process and transmission of a 
+SABM frame is being retried.
+
+
+DISC  tries  to go = n  (LEVEL2.ASM) - this progress  message  is 
+displayed  when a link disconnect is in process and  transmission 
+of a DISC frame is being retried.
+
+query  tries to go = n  (LEVEL2.ASM) - this progress  message  is 
+displayed  when a link query is in process and transmission of  a 
+RR, RNR, or REJ frame is being retried.
+
+L2:  T1  timed out - retransmitting I frame n - tries to go  =  k  
+(LEVEL2.ASM) - this progress message is displayed when an I frame 
+has  not  been  acknowledged  in the timeout  period  and  is  in 
+retransmission is in process.
+
+L2:  tx retry count exhausted - no reply from DCE  (LEVEL2.ASM) - 
+this   status   message   is  displayed  when   the   number   of 
+retransmissions of a SABM,  DISC, RR, RNR or I frame has exceeded 
+the maximum value.
+
+L2:  disconnecting  link  (LEVEL2.ASM) - this status  message  is 
+displayed after the retry count is exhausted when the system will 
+attempt to disconnect the link.
+
+L2:  rx  empty frame (no control byte) (LEVEL2.ASM) - this  error 
+message indicates that an empty frame has been passed to the link 
+level handler from the interrupt hardware handler.
+
+L2: rx bad address:
+  L2:  frame  contents:  (LEVEL2.ASM) - this debug error  message 
+indicates  that a frame having an address other than A or  B  has 
+been  received.   If the debug option hs been enabled  at  module 
+assembly time the contents of the frame are dumped in hex.
+
+L2:  rx  SABM - link connected by dce  (LEVEL2.ASM) - this status 
+message indicates that a the link has been connected by reception 
+of a SABM frame from the dce.
+
+L2:  rx  DISC  - link disconnected by  dce   (LEVEL2.ASM)  - this 
+status  message indicates that the link has been disconnected  by 
+reception of a DISC frame from the dce.
+
+L2:   bad  received  N(r)   (LEVEL2.ASM)  - this  error   message 
+indicates that a numbered frame has been received with an invalid 
+receive sequence number.
+
+L2: dce ready (LEVEL2.ASM) - this status message indicates that a 
+RR frame has been received in reply to a link query.
+
+L2: dce busy (LEVEL2.ASM) - this  status message indicates that a 
+RNR frame has been received in reply to a link query.
+
+L2:  dce  in  REJ condition  (LEVEL2.ASM) - this  status  message 
+indicates  that a REJ frame has been received in reply to a  link 
+query.
+
+L2:  rx  DM  - dce unable to connect (LEVEL2.ASM)  - this  status 
+message indicates that a DM frame has been received from the DCE.
+
+L2:  rx  UA - link connected (LEVEL2.ASM) - this  status  message 
+indicates that a UA frame has been received from the DCE in reply 
+to a previously transmitted SABM frame, thus connecting the link.
+
+L2: rx UA - link disconnected  (LEVEL2.ASM) - this status message 
+indicates that a UA frame has been received from the DCE in reply 
+to  a previously transmitted DISC frame,  thus disconnecting  the 
+link.
+
+L2: rx CMDR/FRMR - frame rejected:
+      rejected frame id =
+      rejected frame type = response/command
+      error  bits  zyxw=                          (LEVEL2.ASM)  - 
+this  status  message indicates that a CMDR/FRMR frame  has  been 
+received from the DCE.
+
+
+
+Packet Level (L3:) Messages:  
+
+
+
+L3: rx empty I frame  (LEVEL2.ASM) - this error message indicates 
+that an I frame has been received with correct format but with an 
+empty I field.
+
+L3:  link  not  connected - cannot send interrupt (LEVEL3.ASM)  - 
+this error message indicates that the requested interrupt  cannot 
+be  transmitted because the level 2 link connection has not  been 
+established.
+
+L3:   link  not  in  data  xfer  state  - cannot  send  interrupt  
+(LEVEL3.ASM)  - this  error message indicates that the  requested 
+interrupt  cannot be transmitted because the level 3  channel  is 
+not in the flow control ready state.
+
+L3: DTE interrupt is pending - cannot send interrupt (LEVEL3.ASM) 
+- this  error  message  indicates that  the  requested  interrupt 
+cannot be transmitted because a previously transmitted  interrupt 
+has not yet been acknowledged.
+
+L3:   link   not  connected  (LEVEL3.ASM)  - this  error  message 
+indicates  that  the requested restart request packet  cannot  be 
+transmitted because the level 2 link is not connected.
+
+L3:   T20  timed  out  - retransmitting  restart  request  packet 
+(LEVEL3.ASM)  - this  error message indicates that  a  previously 
+transmitted  restart  request  packet was  not  acknowledged  and 
+another restart request is being transmitted.
+
+L3:  tx retry count exhausted - no reply from DCE  (LEVEL3.ASM) - 
+this error message indicates that no reply to the restart request 
+packet has been received after the allowed number of retries.
+
+L3:   T21   timed   out  - transmitting  clear   request   packet 
+(LEVEL3.ASM)  - this  error message indicates that no  reply  has 
+been received to a previously transmitted call request packet and 
+that a clear request packet is being transmitted.
+
+L3:   T22   timed  out  - retransmitting  reset  request   packet 
+(LEVEL3.ASM)  - this  error message indicates that no  reply  has 
+been  received  to a previously transmitted reset request  packet 
+and that another reset request is being retransmitted.
+
+L3:   T23   timed  out  - retransmitting  clear  request   packet  
+(LEVEL3.ASM)  - this  error message indicates that no  reply  has 
+been  received to a previously transmitted clear  request  packet 
+and that another clear request is being retransmitted.
+
+L3:  tx  retry  count  exhausted - logical channel out  of  order  
+(LEVEL3.ASM)  - this  error message indicates that no  reply  has 
+been  received  to  retransmissions due to T22 or T23  time  outs 
+after the maximum number of retransmissions permitted.
+
+L3:   rx  call  connected  (LEVEL3.ASM)  - this  status   message 
+indicates  that  the channel has been placed in the flow  control 
+ready  state by a call connected packet received from the DCE  in 
+reply to a previously transmitted call request packet.
+
+L3:  bad  address  - tx clear request (LEVEL3.ASM)  - this  error 
+message indicates that a call connected packet has been  received 
+with  an invalid address and that a clear request packet is being 
+transmitted.
+
+L3:  call  refused - tx clear request  (LEVEL3.ASM) - this  error 
+message indicates that the incoming call packet is being  refused 
+and that a clear request packet is being transmitted in reply.
+
+L3:  rx  clear indication packet,  cause = n (LEVEL3.ASM)  - this 
+status  message indicates that a clear indication packet has been 
+received,  thus terminating the existing call.  A diagnostic code 
+, if transmitted follows the above message.
+
+L3:  rx  clear  confirmation packet  (LEVEL3.ASM)  - this  status 
+message  indicates  that  a clear confirmation  packet  has  been 
+received  in  reply  to a previously  transmitted  clear  request 
+packet, thus terminating the existing call.
+
+L3:  rx  INT  packet - user data:    (LEVEL3.ASM)  - this  status 
+message  indicates  that an interrupt packet has  been  received, 
+with the user data code as shown.
+
+L3:  rx  interrupt confirmation packet (LEVEL3.ASM) - this status 
+message indicates that an interrupt confirmation packet has  been 
+received in reply to a previously transmitted interrupt packet.
+
+L3:  rx  DIAG  packet - diagnostic # n
+  L3:   diagnostic  explanation:             (LEVEL3.ASM)  - this 
+error  message  indicates  that  a  diagnostic  packet  has  been 
+received  with the code as shown.   If a  diagnostic  explanation 
+field  is included in the diagnostic message,  the second part of 
+the message will appear.
+
+L3:  rx restart (LEVEL3.ASM) - this status message indicates that 
+a restart packet has been received and that the packet level flow 
+control variables have been reset to their original values. 
+
+L3: local procedure error - resetting channel (LEVEL3.ASM) - this 
+error  message  indicates that an error has been detected in  the 
+received  packet  transmit  sequence number  P(s)  and  that  the 
+channel is being reset by transmission of a reset request packet.
+
+
+User Interface (L4:) Messages
+
+L4:  console  input  buffer  overflow  (XUTIL.ASM)  - this  error 
+message  indicates  that the console input buffer  has  not  been 
+cleared and that typed characters are being lost.
+
+L4:  transmit  file  is  already open  (FILES.ASM)  - this  error 
+message  indicates  that the requested transmit  file  cannot  be 
+opened because a transmit file is already open.
+
+L4:  file  not found  (FILES.ASM) - this error message  indicates 
+that  the transmit file cannot be opened because no file by  that 
+name exists. 
+
+L4:  file  transmission  in  process  (FILES.ASM)  - this  status 
+message  indicates that a transmit file has been opened and  that 
+the packet level channel is in flow control ready state.
+
+L4:  ready  to transmit file  (FILES.ASM) - this  status  message 
+indicates  that  a  transmit file has been opened  but  that  the 
+packet level channel is not in flow control ready state.
+
+L4:  transmit  file  closed  (FILES,ASM)  - this  status  message 
+indicates that the transmit file has been closed.
+
+L4: receive file is already open (FILES.ASM) - this error message 
+indicates  that  the  requested  receive file  cannot  be  opened 
+because a receive file is already open. 
+
+L4:  receive  file open - awaiting data (FILES.ASM) - this status 
+message  indicates  that  the requested  receive  file  has  been 
+successfully  opened  and that all received data will be  written 
+onto the file.
+
+L4:   receive  file  closed  (FILES.ASM)  - this  status  message 
+indicates that the receive file has been closed.
+
+L4:  file  name error (FILES.ASM)  - this error message indicates 
+that the requested file name is not a valid file name.
+
+L4:  frame  logging  enabled  (FILES.ASM) - this  status  message 
+indicates that the session log file has been successfully  opened 
+and  that all subsequent frames will be logged on the session log 
+file.
+
+L4:  frame  logging  disabled  (FILES.ASM) - this status  message 
+indicates  that the session log file has been closed and that  no 
+more frames are being logged in the session file.
+

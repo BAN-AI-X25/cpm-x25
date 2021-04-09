@@ -1,0 +1,496 @@
+********************************************************
+*                                                      *
+*        X.25 Protocol Interface for CP/M-80           *
+*                                                      *
+*            SYSTEM FUNCTIONAL DESCRIPTION             *
+*                                                      *
+*   (C) 1985  Ed Elizondo                              *
+*             6 Cypress Court                          *
+*             East Windsor, NJ 08520                   *
+*                                                      *
+*   NOTICE:  All Rights Reserved - These programs and  *
+*   accompanying documentation may be used freely for  *
+*   non-commercial applications.  They may not be sold *
+*   or used for commercial applications without the    *
+*   written permission of the author.                  *
+*                                                      *
+********************************************************
+
+
+
+1.  Introduction
+
+
+     The  technique of packet transmission is currently the  most 
+widely used message switching technique in computer networks  and 
+has  received  significant impetus by world wide  standardization 
+efforts.  The  X.25 packet network interface,  pioneered  by  the 
+French  postal  administration Transpac network and the  Canadian 
+Datapac network,  was adopted as a standard by the  International 
+Consultative  Committee  of Telephony and Telegraphy  (CCITT)  in 
+1976, and updated to its current form in 1981.
+
+     With rare exceptions packet transmission has been limited to 
+data  communications  between  large  mainframe   computers,   or 
+internal  to large networks.   The purpose of this project is  to 
+provide   a  utility  program  to  permit  direct   packet   data 
+communications between a microcomputer, running under the CP/M-80 
+operating  system,  and a synchronous network modem or  mainframe 
+computer  port supporting the X.25 standard access protocol.  The 
+software package developed for this project fully implements  the 
+functions of a single logical channel DTE, as defined by the X.25 
+standard.
+
+     The software package was implemented in Intel 8080  assembly 
+language,  compatible  with the Digital Research RMAC  relocating 
+macro   assembler,   and  targeted  to  run  on  an   inexpensive 
+microcomputer  system,   the  Digital  Research  Computers'  "Big 
+Board".    The   minimum   hardware  requirements   are   a   Z80 
+microprocessor,  a  Zilog  SIO synchronous serial  communications 
+port,  and  a Zilog CTC counter/timer,  all interfaced using  Z80 
+mode  2  interrupts.   Memory  requirements  for  the  system  as 
+implemented are a modest 26K for both program and data buffers.
+
+
+
+2. The X.25 Protocol
+
+
+     The  rules  and  mechanisms  by which users  and  a  network 
+exchange  information  in a controlled manner are referred to  as 
+protocols.    The   complexity  and  diversity  of  the   network 
+constituents  favor  multiple layers  of  protocols,  each  layer 
+providing  communications between two similar classes of devices.  
+The  International  Standards Organization (ISO) has  proposed  a 
+structure  of seven hierarchical protocol layers  (see  ref.  6).  
+The X.25 standard specifies the three lowest layers, namely:
+
+     1. the physical circuit level
+
+     2. the link level
+
+     3. the network level
+
+
+     Level   1,   the  physical  circuit  level,   specifies  the 
+electrical waveforms,  voltages,  and pin connections between the 
+end  user,  in  X.25  terminology,  the  "host"  or  "DTE"  (Data 
+Terminating  Equipment),  and  the  network node or  "DCE"  (Data 
+Communications Equipment).  The X.25 standard specifies the Level 
+1  interface as being the CCITT X.21 standard (see reference 1 or 
+2),  but  allows,  in an interim basis,  the use of  the  X.21bis 
+standard.   The  X.21bis standard,  in turn,  permits the use  of 
+existing  synchronous  modem  standards such as the  CCITT  V.24, 
+which  is  equivalent  to  the common (in  the  USA)  EIA  RS232C 
+standard.
+
+     Level 2, the link level, controls bit data transmission over 
+the  physical link between the two ends of the level  1  circuit.  
+The  primary  purpose  of the Level 2 protocol is that  of  error 
+control and of data transparency to higher level protocols.   The 
+X.25  standard  specifies the Level 2 protocol as being  the  ISO 
+standard High Data Link Control (HDLC).
+
+     Information is passed from Level 2 to Level 1 in the form of 
+data blocks called frames.  The frames utilize a technique called 
+zero  bit  insertion  (see  reference  6),  to  achieve  complete 
+transparency to the data at the bit level.   Thus the HDLC  frame 
+is  capable of transmitting any form of data without the need for 
+special control characters within the frame as in the IBM  BYSYNC 
+method  of transmission.   Error control at the Level 2 interface 
+is  achieved by transmitting a cyclic polynomial  check  sequence 
+with  every  frame.   This check sequence is re-generated at  the 
+receiving  end  and,  if  an error is  detected,  a  request  for 
+retransmission is automatically sent back to the sender.
+
+     Level 3,  the network level, controls the actual transfer of 
+information  between two hosts (DTE's).   The primary purpose  of 
+the  Level  3  protocol  is that  of  data  flow  control.   This 
+involves  individual  addressing  and sequencing of  data  blocks 
+called  packets.   Flow control is achieved primarily  by  packet 
+sequence   numbers  and  corresponding  acknowledgement   numbers 
+incorporated  into  the return flow packets. 
+
+     Level  3 packets are transmitted as the information  portion 
+of Level 2 frames, one data packet to each HDLC frame.
+
+     Higher  level  protocol tasks are not specified by the  X.25 
+standard.   In  the ISO proposed architecture,  these  additional 
+levels  include  the transport  level,  the  session  level,  the 
+presentation level and the application level.  For the purpose of 
+this project,  two facilities are provided to handle these higher 
+functions.
+
+     One  high level facility provided by the system is  that  of 
+terminal mode emulation.   With this facility, a typed message at 
+the microcomputer console is sent to the network as a single data 
+packet  message.   Message  packets returned by the  network  are 
+similarly displayed on the console.
+
+     The  second  high level facility provided by the  system  is 
+that of bidirectional data file transfer.   With this facility, a 
+previously prepared file may be sent to the network as a sequence 
+of data packets.   Similarly, a sequence of data packets received 
+from  the  network  may  be saved in a  local  file.   With  this 
+facility,  a pre-arranged sequence of commands and/or data may be 
+sent to the network host and the returned results saved for later 
+analysis.
+
+
+3.  System Organization
+
+
+     The  basic  system organization consists of  two  concurrent 
+processes,  an  interrupt  handler to service the real time  data 
+interface  functions  between the system and  the  communications 
+port  and a sequential processor to handle the  orderly  assembly 
+and disassembly of data packets and process local user commands.
+
+     The  interrupt  handler performs three basic  functions:  a) 
+receives  incoming  data  from the  communications  port  to  the 
+currently active receive buffer,  b) transmits outgoing data from 
+the  currently active transmit buffer to the communications port, 
+and c) keeps track of elapsed time and signals timeout conditions 
+to the sequential processor.
+
+     The  sequential processor performs five basic functions:  a) 
+receives  and transmits data to and from  the local user  console 
+including  processing  of  local  user  commands,   b)  assembles 
+information   or   supervisory  frames   for   transmission,   c) 
+disassembles received frames and processes them,  d) disassembles 
+received  packets and processes them,  and e) assembles  data  or 
+control packets for transmission.
+
+     Processing  of received frames includes checking for  format 
+errors  and for valid frame types and formatting the  appropriate 
+reply  frames  based on the type of received  frame  and  current 
+state  of  the system.   For information frames,  error  checking 
+includes  checking  of frame sequence numbers,  updating  of  the 
+frame   transmission  window  and  retransmission  of  frames  if 
+requested by the remote system.
+
+     Processing  of received packets is similar to processing  of 
+received  frames,   except  retransmission  of  packets  is   not 
+required, since the level 3 transmission is considered error free 
+by virtue of the error control mechanisms that form a part of the 
+level 2 link transmission.
+
+     The  implementation architecture consists of seven  modules, 
+whose names and primary functions are as follows:
+
+     X25       - the main program, which includes the system 
+                 initialization, user interface and main 
+                 program sequencer
+
+     LEVEL1    - the interrupt handler
+
+     LEVEL2    - the link level handler, which includes frame                              
+                 assembly and disassembly 
+
+     LEVEL3    - the packet level handler, which includes packet
+                 assembly and disassembly
+     
+     FILES     - the disk file handler
+
+     BUFFERS   - the data buffer handler
+
+     XUTIL     - miscellaneous general use subroutines
+
+     These .ASM modules are separately assembled into relocatable 
+object  code  .REL  files by means of the Digital  Research  RMAC 
+macro  assembler,  and  then  linked together  with  the  Digital 
+Research Z80 and SEQIO macro libraries into the executable object 
+code  file  X25.COM  by means of  the  Digital  Research  LINK-80 
+linker. 
+
+
+4.  System Data Flow
+
+     Incoming  data  from the communications port is placed  into 
+the  currently  active  buffer  by  the  receive  data  interrupt 
+handler.   The end of a received frame is detected by the level 1 
+hardware  (Z80 SIO),  which also checks for correct frame  format 
+and  correct cyclic polynomial.  Invalid frames are discarded  at 
+this  point.   Valid  frames are passed onto  the  receive  frame 
+disassembly processor in the level 2 module.
+
+     It  should be noted at this point that the  actual  received 
+data  is  not passed from one level to another,  but  rather  the 
+receive buffer number (an internal system parameter identifying a 
+particular buffer, in this case containing a full valid frame) is 
+placed  on a queue list for processing by the next  level.   This 
+important  concept minimizes the overhead required by the  system 
+to move data from one level of processing to another.
+
+     The level 2 received frame disassembler checks the frame for 
+proper  address,  examines the control byte to identify the frame 
+type,  changes  the state of the system if required by the  frame 
+type,  and  gives control to the proper response  frame  transmit 
+routine if required by the frame type and system state.
+
+     If the received frame is an information frame, and the state 
+of  the  system  permits acceptance of such  a  frame,  the  send 
+sequence number of the frame N(s) is checked against the expected 
+frame  sequence  number  and  if  invalid,   a  reject  frame  is 
+transmitted in accordance with the X.25 protocol.
+
+     If  the  received  send  sequence  number  is  correct,  the 
+information  field of the frame (which contains the data  packet) 
+is  passed  to the received packet disassembler in  the  level  3 
+module.   As  before,  actual data is not passed,  but rather the 
+received buffer number is placed on a received packet queue  list 
+to await processing by the next level.
+
+     In received information frames,  and in numbered supervisory 
+frames,  the received sequence number N(r) contained in the frame 
+is  used to acknowledge previously transmitted information frames 
+and  update the 'window' of permitted transmit  sequence  numbers 
+for outgoing information frames.  In this manner, received frames 
+control  the  rate  of  transmission of frames  in  the  opposite 
+direction.
+
+     The  level 3 packet disassembler checks the packet for valid 
+format,  proper  group number and channel  number,  examines  the 
+packet identifier octet to determine the packet type, changes the 
+state  of  the  system as required by the packet type  and  gives 
+control to the proper packet transmit routine if required by  the 
+packet type and current system state.
+
+     If the received packet is a data packet and the state of the 
+machine  permits  acceptance  of data packets,  the  packet  send 
+sequence  number P(s) is checked against the expected  value.   A 
+packet  number outside the received window or out of sequence  is 
+considered a local procedure error and causes the system to  send 
+a reset request packet to logically  reset the circuit.  
+
+     If the received data packet is valid and a receive data file 
+has been previously opened,  the data in the packet is written to 
+the disk file.   If a receive file is not open,  the data is sent 
+to the console (CRT) buffer for display to the local user.   Only 
+displayable  ASCII  characters  and  a selected  set  of  control 
+characters are actually sent to the console;  a period is used to 
+replace  any  non-displayable characters to  avoid  unpredictable 
+behavior of the console.
+
+     In a manner similar to level 2,  the packet receive sequence 
+number  P(r)  in  data  or  flow  control  packets  is  used   to 
+acknowledge previously transmitted data packets and to update the 
+packet 'window' for  transmission.  In this manner, received data 
+or  flow control packets control the rate of transmission of data 
+packets in the reverse direction.
+
+     Receive  buffers which have been discarded along the way  or 
+have  delivered  their  data to the final  destination  are  made 
+available  for  reuse by placing their frame numbers in  a  queue 
+list  of free buffer numbers.   These available frames  are  made 
+active  one  at  a  time as required by  the  hardware  interrupt 
+service  routines  in the level 1 module.   The  number  of  free 
+receive  buffers at any given time determines the ready state  of 
+the  system,  which controls the updating of sequence numbers and 
+the  types  of flow control frames and packets  returned  to  the 
+communications port.  This process, in turn, controls the rate at 
+which  new  information frames and data packets are sent  to  the 
+system,  thus insuring that data is not transmitted to the system 
+faster than the system can process it.
+
+     The  transmit  process  is  considerably  simpler  than  the 
+receive process.   Data typed in the system console is written to 
+a  console data buffer.  Assuming the system has been placed in a 
+state  where  the remote system can accept data  and  the  packet 
+transmit  window allows it,  the transmit process can begin.  The 
+level  3 packet assembly processor reads data from  the  transmit 
+disk  file,  if such a file has been opened;  or from the console 
+buffer,  and  places the data in the next sequentially  available 
+free transmit buffer.
+
+     When the maximum data packet size has been reached,  or when 
+the end of file has been reached, or when a carriage return typed 
+at the system console is encountered, the level 3 packet assembly 
+processor  stops  reading data and  assembles a data packet  with 
+the  correct sequence numbers (in this system,   the  transmitted 
+packet  send  sequence number P(s) is by definition equal to  the 
+transmit  buffer number).   It then tags the buffer with a  ready 
+flag.
+
+     The  level  2 frame transmit processor only  starts  working 
+when  the level 1 processor indicates that the hardware interface 
+(Z80-SIO)  is  not busy transmitting.   When  this  condition  is 
+satisfied,  and when its transmit window allows it, it checks for 
+a  ready  flag in the next sequential transmit buffer.   When  it 
+finds  such a flag,  it assembles an information frame  with  the 
+correct  sequence  numbers and signals the level 1  processor  to 
+transmit the frame.
+
+     After  the  frame is transmitted,  the buffer  pointers  are 
+restored  and the buffer kept intact for possible retransmission. 
+As transmitted frames are acknowledged by the remote system,  the 
+transmit  'window' is updated and the transmit frame buffers  are 
+cleared  and  made  available for use  by  the  next  transmitted 
+packet. By this mechanism, the remote system controls the maximum 
+rate   at  which  the  system  will  transmit  data  packets  and 
+information frames to the communications port so as not to exceed 
+the remote system's capacity for processing data packets.
+
+
+
+5.  Internal Data Storage
+
+     With some minor exceptions,  all data internal to the system 
+is  stored  in circular first-in-first-out buffers controlled  by 
+identical pointer structures.   Using a common control  structure 
+has  the  decided  advantage  that it  permits  using   the  same 
+subroutines to access all buffers, regardless of size or purpose.  
+The  only buffers not complying with this format are the  buffers 
+whose  format  is defined by the CP/M operating system,  such  as 
+disk file read and write buffers.  
+
+     As  implemented,  the  system contains sixteen receive  data 
+buffers,  but this number may be easily increased up to a maximum 
+of  127  if sufficient memory is available in  the  system.   The 
+implemented  buffer  size corresponds to a  maximum  packet  data 
+field  size of 128 octets,  which is the standard maximum  packet 
+user data length recommended in the X.25 standard. 
+
+     The system also contains eight transmit data buffers, of the 
+same  size as the receive buffers.   Each transmit data buffer is 
+assigned to one of the eight possible frame send sequence numbers 
+(0 to 7).
+
+     In  addition to the receive and transmit data  buffers,  the 
+system contains three queue buffers used to hold lists of receive 
+buffer identification numbers as follows:
+     
+     list of free receive buffers
+     list of receive buffers containing full received frames
+     list of receive buffers containing full received packets
+      
+     These  queue  buffers  are  used to control  the  data  flow 
+between  processing  levels  by  passing  buffer   identification 
+numbers between levels, rather than transferring data.
+
+     In  addition to the preceding,  five additional buffers  are 
+provided  to handle the interface between the local user and  the 
+packet processing system.  These buffers are:
+
+     a) the  console input buffer to handle typed input from  the 
+        local keyboard.
+
+     b) the console output buffer to handle data intended for the 
+        local CRT output device.
+
+     c) the console transmit buffer to interface typed input data 
+        intended for transmission in packets.
+
+     d) the console receive buffer to handle incoming packet data 
+        intended for display at the local console.
+
+and  e)  the  printer output buffer intended to  handle  incoming                  
+        packet  data  and  typed  data which is  intended  to  be                           
+        printed  locally  (the printer feature is  not  currently                   
+        implemented in the hardware selected for the system).
+
+     In addition to the system data buffers described above, four 
+additional  buffer areas have been provided for  read/write  disk 
+access.  The  areas  are   used by the CP/M operating  system  to 
+buffer data from and to the receive and transmit disk data files, 
+the  system default parameter disk file and the session log  disk 
+file.   These  buffers  are  accessed by  the  system  via  macro 
+routines provided in the Digital Research SEQIO macro library.  
+
+
+6.  Hardware Configuration
+
+     The  system  was implemented to run on  a  Digital  Research 
+Computers'  "Big  Board" single board computer.   This  unit  was 
+selected because of its low cost,  because it had the desired SIO 
+serial  interface  hardware and CTC timers built in,  because  it 
+employed the desirable Z80 mode 2 vectored interrupts for all I/O 
+hardware,  because of its popularity with hobbyists and, last but 
+not least,  because of the availability of full documentation  in 
+the  form of hardware schematics and source code for the built in 
+monitor and CP/M BIOS routines.
+
+
+7. BIBLIOGRAPHY
+
+
+1.   "Data  Communications  Networks,  Services  and  Facilities, 
+Terminal  Equipment and Interfaces,  Recommendations X.1-X.29"  - 
+The  Yellow Book,  Volume VIII - Fascicle  VIII.2,  International 
+Telecommunication Union CCITT, Geneva 1981.  
+
+The international X.25 standard, revised in 1981
+
+2.  The X.25 Protocol and Seven Other Key CCITT Recommendations - 
+Lifetime Learning Publications, Belmont, CA 1983.
+
+An inexpensive reprint of the CCITT X.1,  X.2, X.3, X.21, X21bis, 
+X.25, X.28 and X.29 standards.
+ 
+3.  Microprocessor Applications Reference Book,  Volume 1 - Zilog 
+Corporation, July 1981.
+
+Relevant  compilation  of  application  notes on  the  Zilog  Z80 
+microprocessor family (see references 3a and 3b).
+
+
+3a.    Using   the  Z80  SIO  with  SDLC  (application  brief)   - 
+(part of reference 3)
+
+Application note describing the use of the Zilog Z80-SIO with the 
+HDLC/SDLC  High  Data  Link Control  and  Synchronous  Data  Link 
+Control protocols.  The sample routines described herein were the 
+basis of the routines utilized in the system LEVEL1 module.
+
+
+3b.    Z80  Family  Interrupt  Structure  (tutorial)  - (part  of 
+reference 3)
+
+Concise tutorial describing the interrupt structure of the  Zilog 
+Z80 microprocessor family.
+
+
+4.  Zilog Data  Book  - Zilog Corporation, 1982/1983.
+
+A  reference  compilation of data sheets on the Zilog  family  of 
+microprocessor products, including the Z80, SIO and CTC.
+
+5.  Big Board Documentation - Digital Research Computers, 
+P.O.  Box 401565,  Garland Texas (not related to Digital Research 
+Corp of Pacific Grove CA).
+
+Documentation  on  the  hardware used to  implement  the  project 
+system.
+
+
+6. Cole, Robert - "Computer Communications", Springer-Verlag,
+1982. 
+
+A  general overview of current computer communications  practice, 
+with  particular  emphasis  on  networking.   Contains  excellent 
+introductory  descriptions of the operation of the HDLC and  X.25 
+protocols. One chapter and portions of several others are devoted 
+to  the X.25 protocol,  including discussion of areas not defined 
+by the standard, problem areas  and some current user practices.
+
+
+7.  "CP/M  MAC Macro Assembler:  Language Manual and Applications 
+Guide" - Digital Research Corp.
+
+Reference guide for the MAC and RMAC macro assembler,  the latter 
+used  to  develop the project system.   Also  includes  reference 
+information on the SEQIO sequential file access macro library.
+
+8.   Intel  8080  Assembly  Language  Programming  Manual,  Intel 
+Corporation 1976.
+
+Comprehensive  reference  to the assembly  language  instructions 
+used to implement the project.
+
+
+9.  Z80 Assembly Language Programming Manual,  Zilog Corporation, 
+1977.
+
+Comprehensive reference to the special bit manipulation and block 
+move instructions used to implement the project.
+
