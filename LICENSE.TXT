@@ -1,0 +1,5 @@
+These programs and documentation are copyright (c) 1985 by Ed Elizondo,
+East  Windsor, NJ  08520, USA.  All rights are reserved. These programs
+and  accompanying  documentation may  be used freely for non-commercial
+applications.  They may not be sold or used for commercial applications
+without the written permission of the author.    
